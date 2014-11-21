@@ -1,4 +1,5 @@
 <?php
+
 require_once '../../define_root.php';
 
 // Set maximum execution time to 6 minutes as cron runs every 7 minutes. (There should be better way to do this)
@@ -11,11 +12,10 @@ $start_date = date('r');
 $lockfile = INCLUDE_ROOT . 'tmp/cron.lock';
 
 /**  Define cron specific functions */
-
 // log to formr log file
 function cron_log($message) {
 	$logfile = INCLUDE_ROOT . 'tmp/logs/formr_error.log';
-	error_log(date('Y-m-d H:i:s') . ' ' . $message. "\n", 3, $logfile);
+	error_log(date('Y-m-d H:i:s') . ' ' . $message . "\n", 3, $logfile);
 }
 
 // clean up on shutdown
@@ -67,87 +67,92 @@ session_over($site, $user);
 
 $user->cron = true;
 
-// Get all runs
-$g_runs = $fdb->query("SELECT name FROM `survey_runs` WHERE cron_active = 1 ORDER BY RAND();");
-$runs = array();
-while($tmp = $g_runs->fetch()) {
-	$runs[] = $tmp;
-}
-
-$r = 0;
-foreach($runs as $run_data):
-	$i = 0;
-	$r++;
-	$done = array('Pause' => 0,'Email' => 0,'SkipForward' => 0, 'SkipBackward' => 0, 'Shuffle' => 0);
-	$created = date('Y-m-d H:i:s');
-
-	$run = new Run($fdb, $run_data['name']);
-	if(!$run->valid) {
-		alert("This run '{$run_data['name']}' caused problems", 'alert-danger');
-		continue;
+// Wrap in a try catch just in case because we can't see shit
+try {
+	// Get all runs
+	$g_runs = $fdb->query("SELECT name FROM `survey_runs` WHERE cron_active = 1 ORDER BY RAND();");
+	$runs = array();
+	while ($tmp = $g_runs->fetch()) {
+		$runs[] = $tmp;
 	}
-	
-	// get all session codes that have Branch, Pause, or Email lined up (not ended)
-	$dues = $run->getCronDues();
 
-	// Foreach session, execute all units
-	foreach($dues as $session) {
-		$run_session = new RunSession($fdb, $run->id, 'cron', $session);
-		// Q. How will this go through all units of a session?
-		$types = $run_session->getUnit(); // start looping thru their units.
-		$i++;
+	$r = 0;
+	foreach ($runs as $run_data):
+		$i = 0;
+		$r++;
+		$done = array('Pause' => 0, 'Email' => 0, 'SkipForward' => 0, 'SkipBackward' => 0, 'Shuffle' => 0);
+		$created = date('Y-m-d H:i:s');
 
-		if($types === false):
-			alert("This session '$session' caused problems", 'alert-danger');
-			continue 1;
-		endif;
-
-		foreach($types as $type => $nr) {
-			if (!isset($done[$type])) {
-				$done[$type] = 0;
-			}
-			$done[$type] += $nr;
+		$run = new Run($fdb, $run_data['name']);
+		if (!$run->valid) {
+			alert("This run '{$run_data['name']}' caused problems", 'alert-danger');
+			continue;
 		}
-	}
 
-	// Build message report for current Run (saved in cron log)
-	$alert_types = $site->alert_types;
-	$alerts = $site->renderAlerts();
-	$alerts = str_replace('<button type="button" class="close" data-dismiss="alert">&times;</button>', '', $alerts);
+		// get all session codes that have Branch, Pause, or Email lined up (not ended)
+		$dues = $run->getCronDues();
 
-	$executed_types = cron_parse_executed_types($types);
-	
-	$msg = date( 'Y-m-d H:i:s' ) . ' ' . "$i sessions in the run ". $run->name. " were processed. {$executed_types} ended.<br>" . "\n";
-	$msg .= $alerts;
+		// Foreach session, execute all units
+		foreach ($dues as $session) {
+			$run_session = new RunSession($fdb, $run->id, 'cron', $session);
+			// Q. How will this go through all units of a session?
+			$types = $run_session->getUnit(); // start looping thru their units.
+			$i++;
 
-	// Save cron log (This should be moved to logging in file system to avoid clustering DB)
-	unset($done["Page"]);
-	if(array_sum($done) > 0 OR array_sum($alert_types) > 0) {	
-		$log = $fdb->prepare("
+			if ($types === false):
+				alert("This session '$session' caused problems", 'alert-danger');
+				continue 1;
+			endif;
+
+			foreach ($types as $type => $nr) {
+				if (!isset($done[$type])) {
+					$done[$type] = 0;
+				}
+				$done[$type] += $nr;
+			}
+		}
+
+		// Build message report for current Run (saved in cron log)
+		$alert_types = $site->alert_types;
+		$alerts = $site->renderAlerts();
+		$alerts = str_replace('<button type="button" class="close" data-dismiss="alert">&times;</button>', '', $alerts);
+
+		$executed_types = cron_parse_executed_types($types);
+
+		$msg = date('Y-m-d H:i:s') . ' ' . "$i sessions in the run " . $run->name . " were processed. {$executed_types} ended.<br>" . "\n";
+		$msg .= $alerts;
+
+		// Save cron log (This should be moved to logging in file system to avoid clustering DB)
+		unset($done["Page"]);
+		if (array_sum($done) > 0 OR array_sum($alert_types) > 0) {
+			$log = $fdb->prepare("
 			INSERT INTO `survey_cron_log` (run_id, created, ended, sessions, skipforwards, skipbackwards, pauses, emails, shuffles, errors, warnings, notices, message)
 			VALUES (:run_id, :created, NOW(), :sessions, :skipforwards, :skipbackwards, :pauses, :emails, :shuffles, :errors, :warnings, :notices, :message)");
-		$log->bindParam(':run_id', $run->id);
-		$log->bindParam(':created', $created);
-		$log->bindParam(':sessions', $i);
-		$log->bindParam(':skipforwards', $done['SkipForward']);
-		$log->bindParam(':skipbackwards', $done['SkipBackward']);
-		$log->bindParam(':pauses', $done['Pause']);
-		$log->bindParam(':emails', $done['Email']);
-		$log->bindParam(':shuffles', $done['Shuffle']);
-		$log->bindParam(':errors', $alert_types['alert-danger']);
-		$log->bindParam(':warnings', $alert_types['alert-warning']);
-		$log->bindParam(':notices', $alert_types['alert-info']);
-		$log->bindParam(':message', $msg);
-		$log->execute();
-	}
+			$log->bindParam(':run_id', $run->id);
+			$log->bindParam(':created', $created);
+			$log->bindParam(':sessions', $i);
+			$log->bindParam(':skipforwards', $done['SkipForward']);
+			$log->bindParam(':skipbackwards', $done['SkipBackward']);
+			$log->bindParam(':pauses', $done['Pause']);
+			$log->bindParam(':emails', $done['Email']);
+			$log->bindParam(':shuffles', $done['Shuffle']);
+			$log->bindParam(':errors', $alert_types['alert-danger']);
+			$log->bindParam(':warnings', $alert_types['alert-warning']);
+			$log->bindParam(':notices', $alert_types['alert-info']);
+			$log->bindParam(':message', $msg);
+			$log->execute();
+		}
 
-	echo $msg. "<br>";
-	if(microtime() - $start_cron_time > 60 * 6):
-		echo "Cronjob interrupted after running ". (microtime() - $start_cron_time) . " seconds";
-		break;
-	endif;
-endforeach;
-
+		echo $msg . "<br>";
+		if (microtime() - $start_cron_time > 60 * 6):
+			echo "Cronjob interrupted after running " . (microtime() - $start_cron_time) . " seconds";
+			break;
+		endif;
+	endforeach;
+} catch (Exception $e) {
+	cron_log('Cron: ' . $e->getMessage());
+	cron_log('Cron: ' . $e->getTraceAsString());
+}
 // error_log( $msg, 3, INCLUDE_ROOT ."tmp/logs/cron.log");
 $user->cron = false;
 
@@ -156,6 +161,5 @@ require_once INCLUDE_ROOT . "View/footer.php";
 ob_flush();
 ob_clean();
 // Q is buffering really needed?
-
 // Do cleanup just in case
 cron_cleanup();
