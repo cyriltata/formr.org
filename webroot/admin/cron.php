@@ -3,11 +3,11 @@
 require_once '../../define_root.php';
 
 // Set maximum execution time to 6 minutes as cron runs every 7 minutes. (There should be better way to do this)
+$start_time = microtime(true);
 $max_exec_time = 6 * 60;
 set_time_limit($max_exec_time);
 
 // Define vars
-$start_time = microtime(true);
 $start_date = date('r');
 $lockfile = INCLUDE_ROOT . 'tmp/cron.lock';
 
@@ -144,10 +144,9 @@ try {
 		}
 
 		echo $msg . "<br>";
-		if (microtime() - $start_cron_time > 60 * 6):
-			echo "Cronjob interrupted after running " . (microtime() - $start_cron_time) . " seconds";
-			break;
-		endif;
+		if (microtime(true) - $start_time > $max_exec_time) {
+			throw new Exception("How in the hell did we get here? Max execution time exceeded");
+		}
 	endforeach;
 } catch (Exception $e) {
 	cron_log('Cron: ' . $e->getMessage());
