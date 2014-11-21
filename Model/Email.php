@@ -202,10 +202,9 @@ VALUES (:id, :account_id,  :subject, :recipient_field, :body, :body_parsed, :htm
 		$dialog = $prepend . $dialog;
 		return parent::runDialog($dialog,'fa-envelope');
 	}
-	public function getRecipientField()
-	{
-		$openCPU = $this->makeOpenCPU();
 
+	public function getRecipientField() {
+		$openCPU = $this->makeOpenCPU();
 		if($this->recipient_field === null OR trim($this->recipient_field)=='')
 			$this->recipient_field = 'survey_users$email';
 		
@@ -215,8 +214,8 @@ VALUES (:id, :account_id,  :subject, :recipient_field, :body, :body_parsed, :htm
 
 		return $openCPU->evaluate($this->recipient_field);
 	}
-	public function sendMail($who = NULL)
-	{
+
+	public function sendMail($who = NULL) {
 		if($who===null):
 			$this->recipient = $this->getRecipientField();
 		else:
@@ -279,17 +278,15 @@ VALUES (:id, :account_id,  :subject, :recipient_field, :body, :body_parsed, :htm
 	        }
 		endforeach;
 		
-		if(!$mail->Send())
-		{
+		if(!$mail->Send()) {
 			$this->mail_sent = false;
             alert('Email with the subject ' . $this->subject . ' was not sent to '. $this->recipient. ':<br>' .$mail->ErrorInfo,'alert-danger');
-		}
-		else 
-		{
+		} else {
 			$this->mail_sent = true;
 	    	$this->logMail();
 		}
 	}
+
 	private function numberOfEmailsSent()
 	{
 		$log = $this->dbh->prepare("SELECT
@@ -377,14 +374,14 @@ VALUES (:id, :account_id,  :subject, :recipient_field, :body, :body_parsed, :htm
 		echo '</tbody></table>';
 		$this->run_session_id = null;
 	}
-	public function exec()
-	{
+
+	public function exec() {
 		$err = $this->sendMail();
 		if($this->mail_sent):
 			$this->end();
 			return false;
 		else:
-			return array('body'=>$err);
+			return array('body' => $err);
 		endif;
 	}
 }

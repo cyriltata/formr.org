@@ -55,18 +55,10 @@ class Run
 			endif;
 		endif;
 	}
+
 	public function getCronDues()
 	{
-		$g_unit = $this->dbh->prepare(
-		"SELECT 
-			`survey_run_sessions`.session
-		
-			 FROM `survey_run_sessions`
-
-		WHERE 
-			`survey_run_sessions`.run_id = :run_id
-		ORDER BY RAND() 
-		;"); // in the order they were added
+		$g_unit = $this->dbh->prepare("SELECT `survey_run_sessions`.session FROM `survey_run_sessions` WHERE `survey_run_sessions`.run_id = :run_id ORDER BY id ASC"); // in the order they were added
 		$g_unit->bindParam(':run_id',$this->id);
 		$g_unit->execute() or die(print_r($g_unit->errorInfo(), true));
 		$dues = array();

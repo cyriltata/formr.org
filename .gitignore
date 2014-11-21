@@ -11,3 +11,5 @@ webroot/assets/tmp
 .Rproj.user
 formr.Rcheck
 formr-package/man
+createclassmap.php
+nbproject/*
