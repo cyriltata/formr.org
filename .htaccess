@@ -33,3 +33,5 @@ AddDefaultCharset UTF-8
 
 # add MIME types
 AddType image/x-icon .ico
+
+php_value memory_limit 2000M
