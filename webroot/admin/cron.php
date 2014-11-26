@@ -13,9 +13,14 @@ $lockfile = INCLUDE_ROOT . 'tmp/cron.lock';
 
 /**  Define cron specific functions */
 // log to formr log file
-function cron_log($message) {
+function cron_log($message, $cron_log = false) {
+	$cron_logfile = INCLUDE_ROOT . 'tmp/logs/cron.log';
 	$logfile = INCLUDE_ROOT . 'tmp/logs/formr_error.log';
-	error_log(date('Y-m-d H:i:s') . ' ' . $message . "\n", 3, $logfile);
+	$message = date('Y-m-d H:i:s') . ' ' . $message . "\n";
+	if ($cron_log) {
+		return error_log($message, 3, $cron_logfile);
+	}
+	error_log($message, 3, $logfile);
 }
 
 // clean up on shutdown
@@ -23,7 +28,9 @@ function cron_cleanup() {
 	global $lockfile, $start_time, $max_exec_time;
 	$exec_time = microtime(true) - $start_time;
 	if ($exec_time >= $max_exec_time) {
-		cron_log("Cron exceeded or reached set maximum script execution time of $max_exec_time secs.");
+		$msg = "Cron exceeded or reached set maximum script execution time of $max_exec_time secs.";
+		cron_log($msg);
+		cron_log($msg, true);
 	}
 
 	if (file_exists($lockfile)) {
@@ -55,6 +62,7 @@ register_shutdown_function('cron_cleanup');
 
 
 /** Do the Work */
+cron_log("Cron started .... {$start_date}", true);
 ob_start();
 
 // Require necessary modules (solved with autoloader in next releases)
@@ -117,7 +125,10 @@ try {
 		$alerts = $site->renderAlerts();
 		$alerts = str_replace('<button type="button" class="close" data-dismiss="alert">&times;</button>', '', $alerts);
 
-		$executed_types = cron_parse_executed_types($types);
+		$executed_types = '[none]';
+		if ($types) {
+			$executed_types = cron_parse_executed_types($types);
+		}
 
 		$msg = date('Y-m-d H:i:s') . ' ' . "$i sessions in the run " . $run->name . " were processed. {$executed_types} ended.<br>" . "\n";
 		$msg .= $alerts;
@@ -160,5 +171,8 @@ require_once INCLUDE_ROOT . "View/footer.php";
 ob_flush();
 ob_clean();
 // Q is buffering really needed?
+$minutes = round((microtime(true) - $start_time) / 60, 3);
+$end_date = date('r');
+cron_log("Cron ended .... {$end_date}. Took ~{$minutes} minutes", true);
 // Do cleanup just in case
 cron_cleanup();
