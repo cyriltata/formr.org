@@ -113,6 +113,7 @@ try {
 			endif;
 
 			foreach ($types as $type => $nr) {
+				cron_log(sprintf(" --- Executing Unit %s[%d] RunSession %s in Run %s", $type, $nr, $run_session->id, $run->name), true);
 				if (!isset($done[$type])) {
 					$done[$type] = 0;
 				}
