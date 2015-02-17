@@ -13,14 +13,10 @@ $lockfile = INCLUDE_ROOT . 'tmp/cron.lock';
 
 /**  Define cron specific functions */
 // log to formr log file
-function cron_log($message, $cron_log = false) {
+function cron_log($message) {
 	$cron_logfile = INCLUDE_ROOT . 'tmp/logs/cron.log';
-	$logfile = INCLUDE_ROOT . 'tmp/logs/formr_error.log';
 	$message = date('Y-m-d H:i:s') . ' ' . $message . "\n";
-	if ($cron_log) {
-		return error_log($message, 3, $cron_logfile);
-	}
-	error_log($message, 3, $logfile);
+	return error_log($message, 3, $cron_logfile);
 }
 
 // clean up on shutdown
@@ -30,7 +26,6 @@ function cron_cleanup() {
 	if ($exec_time >= $max_exec_time) {
 		$msg = "Cron exceeded or reached set maximum script execution time of $max_exec_time secs.";
 		cron_log($msg);
-		cron_log($msg, true);
 	}
 
 	if (file_exists($lockfile)) {
@@ -52,7 +47,12 @@ if (file_exists($lockfile)) {
 	global $start_date;
 	$started = file_get_contents($lockfile);
 	cron_log("Cron overlapped. Started: $started, Overlapped: $start_date");
-	echo "Cron still running...";
+
+	// hack to delete $lockfile if cron hangs for more that 30 mins
+	if (strtotime($started) + strtotime('+30 minutes') < time()) {
+		cron_log("Forced delte of $lockfile");
+		unlink($lockfile);
+	}
 	exit(0);
 }
 
@@ -113,7 +113,7 @@ try {
 			endif;
 
 			foreach ($types as $type => $nr) {
-				cron_log(sprintf(" --- Executing Unit %s[%d] RunSession %s in Run %s", $type, $nr, $run_session->id, $run->name), true);
+				//cron_log(sprintf(" --- Executing Unit %s[%d] RunSession %s in Run %s", $type, $nr, $run_session->id, $run->name));
 				if (!isset($done[$type])) {
 					$done[$type] = 0;
 				}
@@ -177,3 +177,5 @@ $end_date = date('r');
 cron_log("Cron ended .... {$end_date}. Took ~{$minutes} minutes", true);
 // Do cleanup just in case
 cron_cleanup();
+
+exit(0);
