@@ -72,7 +72,7 @@ if (file_exists($lockfile)) {
 	cron_log("Cron overlapped. Started: $started, Overlapped: $start_date");
 
 	// hack to delete $lockfile if cron hangs for more that 30 mins
-	if (strtotime($started) + strtotime('+30 minutes') < time()) {
+	if ((strtotime($started) + (30 * 60)) < time()) {
 		cron_log("Forced delte of $lockfile");
 		unlink($lockfile);
 	}
